@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIJI Foundations — Memory Runner</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;800&display=swap');
+
+  :root{
+    --purple:#4B1F72; --purple-deep:#200B33; --gold:#D8B24C; --gold-bright:#F0CE6C;
+    --chalk:#F5F1E8; --line-white:rgba(245,241,232,0.14);
+    --danger:#E13B3B; --good:#4FD87F;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; height:100%; background:var(--purple-deep); font-family:'Inter',sans-serif; color:var(--chalk); overflow:hidden; -webkit-user-select:none; user-select:none; }
+  #app{ position:relative; width:100%; height:100vh; max-height:100dvh; display:flex; flex-direction:column;
+    background: radial-gradient(ellipse at 50% -10%, rgba(216,178,76,0.16), transparent 55%), linear-gradient(180deg, var(--purple) 0%, var(--purple-deep) 100%); }
+
+  #hud{ display:flex; align-items:center; justify-content:space-between; padding:10px 18px; z-index:20; border-bottom:1px solid var(--line-white); background:rgba(32,11,51,0.55); }
+  .hud-title{ font-family:'Anton',sans-serif; letter-spacing:1px; font-size:16px; color:var(--gold-bright); text-transform:uppercase; }
+  .hud-right{ display:flex; align-items:center; gap:16px; }
+  #lives{ display:flex; gap:6px; font-size:18px; }
+  #lives span{ opacity:0.25; transition:opacity .2s; }
+  #lives span.on{ opacity:1; }
+  #score{ font-family:'Anton',sans-serif; font-size:18px; color:var(--chalk); min-width:64px; text-align:right; }
+  #score small{ display:block; font-family:'Inter'; font-size:9px; letter-spacing:2px; color:rgba(245,241,232,0.5); font-weight:600; }
+  #verseProgress{ font-size:10px; letter-spacing:1px; color:var(--gold); }
+
+  #question-wrap{ text-align:center; padding:12px 16px 8px; z-index:20; flex-shrink:0; }
+  #question-eyebrow{ font-size:10px; letter-spacing:3px; color:var(--gold); font-weight:800; text-transform:uppercase; margin-bottom:4px; }
+  #question{ font-family:'Anton',sans-serif; font-size:clamp(16px,4vw,23px); line-height:1.15; color:var(--chalk); text-transform:uppercase; letter-spacing:0.5px; }
+
+  #track-container{ position:relative; flex:1; overflow:hidden; }
+  #track{ position:absolute; inset:0; display:flex; }
+  .lane{ position:relative; flex:1; border-left:1px dashed var(--line-white); }
+  .lane:first-child{ border-left:none; }
+  .yardlines{ position:absolute; inset:0; background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 54px, var(--line-white) 54px, var(--line-white) 58px); background-size:100% 116px; animation:scrollField 0.6s linear infinite; opacity:0.5; }
+  @keyframes scrollField{ from{background-position-y:0;} to{background-position-y:116px;} }
+  .scrimmage-line{ position:absolute; left:0; right:0; height:2px; background:repeating-linear-gradient(to right, var(--gold) 0 10px, transparent 10px 18px); z-index:5; }
+
+  .sign{ position:absolute; left:4%; right:4%; top:-140px; background:var(--purple-deep); border:3px solid var(--chalk); border-radius:8px; padding:8px 7px; text-align:center; font-weight:700; font-size:clamp(9.5px,2.3vw,12.5px); line-height:1.28; box-shadow:0 4px 0 rgba(0,0,0,0.35); max-height:150px; overflow:hidden; }
+  .sign.correct-flash{ background:var(--good); border-color:var(--good); color:var(--purple-deep); }
+  .sign.wrong-flash{ background:var(--danger); border-color:var(--danger); }
+
+  .player-row{ position:absolute; bottom:8%; left:0; right:0; height:0; display:flex; justify-content:center; z-index:10; pointer-events:none; }
+  .player{ position:absolute; bottom:0; font-size:clamp(30px,7vw,42px); transform:translate(-50%,0); filter:drop-shadow(0 6px 6px rgba(0,0,0,0.5)); transition:left 0.16s cubic-bezier(.3,1.4,.4,1); }
+  .player.hit-good{ animation:pop 0.35s ease; }
+  .player.hit-bad{ animation:shake 0.35s ease; }
+  @keyframes pop{ 0%{transform:translate(-50%,0) scale(1);} 40%{transform:translate(-50%,0) scale(1.35);} 100%{transform:translate(-50%,0) scale(1);} }
+  @keyframes shake{ 0%,100%{transform:translate(-50%,0);} 25%{transform:translate(-62%,0);} 75%{transform:translate(-38%,0);} }
+
+  #feedback-flash{ position:absolute; inset:0; pointer-events:none; opacity:0; z-index:8; transition:opacity 0.15s; }
+  #feedback-flash.show-good{ opacity:1; background:rgba(79,216,127,0.18); }
+  #feedback-flash.show-bad{ opacity:1; background:rgba(225,59,59,0.22); }
+
+  #toast{ position:absolute; top:40%; left:50%; transform:translate(-50%,-50%) scale(0.9); z-index:30; background:var(--gold); color:var(--purple-deep); font-family:'Anton'; letter-spacing:1px; padding:14px 22px; border-radius:8px; font-size:16px; text-transform:uppercase; opacity:0; transition:opacity .25s, transform .25s; text-align:center; pointer-events:none; }
+  #toast.show{ opacity:1; transform:translate(-50%,-50%) scale(1); }
+
+  #controls{ display:flex; z-index:20; flex-shrink:0; border-top:1px solid var(--line-white); }
+  .ctrl-btn{ flex:1; padding:16px 0; background:rgba(216,178,76,0.12); border:none; color:var(--chalk); font-family:'Anton'; font-size:20px; letter-spacing:2px; cursor:pointer; text-transform:uppercase; }
+  .ctrl-btn:active{ background:rgba(216,178,76,0.35); }
+  .ctrl-btn + .ctrl-btn{ border-left:1px solid var(--line-white); }
+
+  .overlay{ position:absolute; inset:0; z-index:50; background:linear-gradient(180deg, rgba(32,11,51,0.97), rgba(20,7,33,0.97)); display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:22px; overflow-y:auto; }
+  .overlay.hidden{ display:none; }
+  .overlay h1{ font-family:'Anton'; font-size:clamp(26px,7vw,40px); color:var(--gold-bright); text-transform:uppercase; margin:0 0 6px; letter-spacing:1px; }
+  .overlay .sub{ color:rgba(245,241,232,0.75); font-size:13px; max-width:360px; margin-bottom:16px; line-height:1.5; }
+  .badge{ font-size:44px; margin-bottom:8px; letter-spacing:3px; font-family:'Anton'; color:var(--gold-bright); }
+  .big-btn{ font-family:'Anton'; font-size:17px; letter-spacing:2px; text-transform:uppercase; background:var(--gold); color:var(--purple-deep); border:none; padding:13px 30px; border-radius:6px; cursor:pointer; box-shadow:0 4px 0 #a5822d; margin-top:6px; }
+  .big-btn:active{ transform:translateY(2px); box-shadow:0 2px 0 #a5822d; }
+  .big-btn:disabled{ opacity:0.4; box-shadow:none; cursor:default; }
+
+  .cat-list{ text-align:left; max-width:360px; width:100%; margin-bottom:14px; }
+  .cat-item{ display:flex; align-items:flex-start; gap:10px; padding:10px 12px; border:1px solid var(--line-white); border-radius:8px; margin-bottom:8px; background:rgba(255,255,255,0.03); }
+  .cat-item input{ margin-top:3px; width:18px; height:18px; accent-color:var(--gold); }
+  .cat-item label{ font-size:13px; font-weight:700; }
+  .cat-item .desc{ font-size:11px; color:rgba(245,241,232,0.55); font-weight:400; margin-top:2px; }
+  .cat-item.disabled{ opacity:0.45; }
+
+  .final-score{ font-family:'Anton'; font-size:52px; color:var(--chalk); margin:4px 0 2px; }
+  .final-score-label{ font-size:11px; letter-spacing:3px; color:var(--gold); text-transform:uppercase; margin-bottom:16px; }
+  .streak-note{ font-size:12px; color:rgba(245,241,232,0.6); margin-bottom:18px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="hud">
+    <div class="hud-title">Φ Γ Δ Foundations</div>
+    <div class="hud-right">
+      <div id="verseProgress"></div>
+      <div id="lives"><span id="l0">🔥</span><span id="l1">🔥</span><span id="l2">🔥</span></div>
+      <div id="score">0<small>SCORE</small></div>
+    </div>
+  </div>
+
+  <div id="question-wrap">
+    <div id="question-eyebrow">Sprint to the right answer</div>
+    <div id="question">Loading...</div>
+  </div>
+
+  <div id="track-container">
+    <div id="track">
+      <div class="lane"><div class="yardlines"></div></div>
+      <div class="lane"><div class="yardlines" style="animation-delay:-0.2s"></div></div>
+      <div class="lane"><div class="yardlines" style="animation-delay:-0.4s"></div></div>
+    </div>
+    <div class="scrimmage-line" style="bottom:8%;"></div>
+    <div id="feedback-flash"></div>
+    <div id="toast"></div>
+    <div class="player-row">
+      <div class="player" id="player">🏃</div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button class="ctrl-btn" id="btnLeft">◀ Left</button>
+    <button class="ctrl-btn" id="btnRight">Right ▶</button>
+  </div>
+
+  <!-- START / MENU -->
+  <div class="overlay" id="startOverlay">
+    <div class="badge">ΦΓΔ</div>
+    <h1>FIJI Foundations</h1>
+    <div class="sub">Sprint through the right answer before the signs cross the line. Pick what you want to drill — mix and match, or focus on one.</div>
+
+    <div class="cat-list">
+      <div class="cat-item">
+        <input type="checkbox" id="catFacts" checked>
+        <div>
+          <label for="catFacts">FIJI Facts &amp; The Immortal Six</label>
+          <div class="desc">Founding date &amp; place, headquarters, chapter flower, and the six founders</div>
+        </div>
+      </div>
+      <div class="cat-item">
+        <input type="checkbox" id="catVerses" checked>
+        <div>
+          <label for="catVerses">1 Corinthians 13 — In Order</label>
+          <div class="desc">Runs sequentially, verse 1 through 13, then loops for repetition</div>
+        </div>
+      </div>
+      <div class="cat-item disabled">
+        <input type="checkbox" disabled>
+        <div>
+          <label>Purple Legionnaire</label>
+          <div class="desc">Coming soon — will be added once the answer is finalized</div>
+        </div>
+      </div>
+    </div>
+
+    <button class="big-btn" id="startBtn">Snap the Ball</button>
+  </div>
+
+  <!-- GAME OVER -->
+  <div class="overlay hidden" id="overOverlay">
+    <div class="badge">ΦΓΔ</div>
+    <h1>Game Over</h1>
+    <div class="final-score-label">Final Score</div>
+    <div class="final-score" id="finalScore">0</div>
+    <div class="streak-note" id="finalNote"></div>
+    <button class="big-btn" id="restartBtn">Run It Back</button>
+  </div>
+
+</div>
+
+<script>
+(function(){
+
+  // ---------------- DATA: FACTS ----------------
+  const IMMORTAL_SIX = [
+    "John Templeton McCarty",
+    "Samuel Beatty Wilson",
+    "James Elliot Jr.",
+    "Ellis Bailey Gregg",
+    "Daniel Webster Crofts",
+    "Naaman Fletcher"
+  ];
+  const DECOY_NAMES = [
+    "William Foster Hale",
+    "Thomas Reed Callahan",
+    "Charles Whitfield Moore",
+    "Henry Aldridge Pope",
+    "Edward Marsh Talley",
+    "Arthur Benton Rice"
+  ];
+
+  function randDistinct(pool, exclude, count){
+    const filtered = pool.filter(v=>v!==exclude);
+    const shuffled = filtered.slice().sort(()=>Math.random()-0.5);
+    return shuffled.slice(0,count);
+  }
+
+  const FACTS = [
+    { prompt:"When was FIJI founded?", correct:"May 1, 1848", decoys:["April 1, 1852","May 1, 1841","June 14, 1850"] },
+    { prompt:"Where was FIJI founded?", correct:"Delta Hall Number One", decoys:["Union Chapter House","Concord Hall","Delta Hall Number Three"] },
+    { prompt:"Where is FIJI's international headquarters?", correct:"1201 Red Mile Road, Lexington, KY", decoys:["1400 Main Street, Lexington, KY","800 Vine Street, Louisville, KY"] },
+    { prompt:"What is the FIJI flower?", correct:"Purple Clematis", decoys:["White Rose","Blue Iris","Yellow Chrysanthemum"] }
+  ];
+  IMMORTAL_SIX.forEach(name=>{
+    FACTS.push({
+      prompt:"Which of these was one of the Immortal Six?",
+      correct:name,
+      decoys: randDistinct(DECOY_NAMES, null, 2)
+    });
+  });
+
+  // ---------------- DATA: 1 CORINTHIANS 13 (CSB numbering) ----------------
+  const VERSES = [
+    "If I speak human or angelic tongues but do not have love, I am a noisy gong or a clanging cymbal.",
+    "If I have the gift of prophecy and understand all mysteries and all knowledge, and if I have all faith so that I can move mountains but do not have love, I am nothing.",
+    "And if I give away all my possessions, and if I give over my body in order to boast but do not have love, I gain nothing.",
+    "Love is patient, love is kind. Love does not envy, is not boastful, is not arrogant,",
+    "is not rude, is not self-seeking, is not irritable, and does not keep a record of wrongs.",
+    "Love finds no joy in unrighteousness but rejoices in the truth.",
+    "It bears all things, believes all things, hopes all things, endures all things.",
+    "Love never ends. But as for prophecies, they will come to an end; as for tongues, they will cease; as for knowledge, it will come to an end.",
+    "For we know in part, and we prophesy in part,",
+    "but when the perfect comes, the partial will come to an end.",
+    "When I was a child, I spoke like a child, I thought like a child, I reasoned like a child. When I became a man, I put aside childish things.",
+    "For now we see only a reflection as in a mirror, but then face to face. Now I know in part, but then I will know fully, as I am fully known.",
+    "Now these three remain: faith, hope, and love — but the greatest of these is love."
+  ];
+
+  function shuffle(arr){
+    const a = arr.slice();
+    for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+    return a;
+  }
+
+  // ---------------- STATE ----------------
+  const state = {
+    lane:1, lives:3, score:0, streak:0, playing:false,
+    factsOn:true, versesOn:true,
+    verseIndex:0,
+    lastFactPrompt:null,
+    current:null, signStart:0, duration:4600, resolved:false, isVerse:false
+  };
+
+  // ---------------- DOM ----------------
+  const el = {
+    question: document.getElementById('question'),
+    lanes: document.querySelectorAll('.lane'),
+    player: document.getElementById('player'),
+    score: document.getElementById('score'),
+    lives: [document.getElementById('l0'), document.getElementById('l1'), document.getElementById('l2')],
+    startOverlay: document.getElementById('startOverlay'),
+    overOverlay: document.getElementById('overOverlay'),
+    finalScore: document.getElementById('finalScore'),
+    finalNote: document.getElementById('finalNote'),
+    feedback: document.getElementById('feedback-flash'),
+    trackContainer: document.getElementById('track-container'),
+    verseProgress: document.getElementById('verseProgress'),
+    toast: document.getElementById('toast'),
+    catFacts: document.getElementById('catFacts'),
+    catVerses: document.getElementById('catVerses'),
+    startBtn: document.getElementById('startBtn')
+  };
+
+  function laneCenterPercent(i){ return (i+0.5)/3*100; }
+  function positionPlayer(){ el.player.style.left = laneCenterPercent(state.lane) + '%'; }
+  function updateLives(){ el.lives.forEach((s,i)=> s.classList.toggle('on', i < state.lives)); }
+  function updateScore(){ el.score.childNodes[0].nodeValue = state.score; }
+  function updateVerseProgress(){
+    el.verseProgress.textContent = state.versesOn ? `1 Cor 13 — ${state.verseIndex}/13` : '';
+  }
+
+  function moveLane(dir){
+    if(!state.playing) return;
+    state.lane = Math.min(2, Math.max(0, state.lane + dir));
+    positionPlayer();
+  }
+  document.addEventListener('keydown', (e)=>{
+    if(e.key==='ArrowLeft'||e.key==='a'||e.key==='A') moveLane(-1);
+    if(e.key==='ArrowRight'||e.key==='d'||e.key==='D') moveLane(1);
+  });
+  document.getElementById('btnLeft').addEventListener('click', ()=>moveLane(-1));
+  document.getElementById('btnRight').addEventListener('click', ()=>moveLane(1));
+  el.trackContainer.addEventListener('click', (e)=>{
+    const rect = el.trackContainer.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    moveLane(x < rect.width/2 ? -1 : 1);
+  });
+
+  // ---------------- QUESTION BUILDING ----------------
+  function buildFactQuestion(){
+    let f;
+    do{ f = FACTS[Math.floor(Math.random()*FACTS.length)]; }
+    while(FACTS.length>1 && f.prompt===state.lastFactPrompt && f.correct===state.lastFactPrompt);
+    state.lastFactPrompt = f.prompt+f.correct;
+    const decoys = shuffle(f.decoys).slice(0,2);
+    const answers = shuffle([
+      { text:f.correct, correct:true },
+      { text:decoys[0], correct:false },
+      { text:decoys[1], correct:false }
+    ]);
+    return { prompt:f.prompt, answers, isVerse:false };
+  }
+
+  function buildVerseQuestion(){
+    const idx = state.verseIndex; // 0-based, next verse due
+    const correctText = VERSES[idx];
+    const otherIdxs = shuffle(VERSES.map((_,i)=>i).filter(i=>i!==idx)).slice(0,2);
+    const answers = shuffle([
+      { text:correctText, correct:true },
+      { text:VERSES[otherIdxs[0]], correct:false },
+      { text:VERSES[otherIdxs[1]], correct:false }
+    ]);
+    return { prompt:`Find Verse ${idx+1} of 1 Corinthians 13`, answers, isVerse:true };
+  }
+
+  function pickQuestionType(){
+    if(state.versesOn && !state.factsOn) return 'verse';
+    if(!state.versesOn && state.factsOn) return 'fact';
+    return Math.random() < 0.45 ? 'verse' : 'fact';
+  }
+
+  function showToast(msg){
+    el.toast.textContent = msg;
+    el.toast.classList.add('show');
+    setTimeout(()=> el.toast.classList.remove('show'), 1400);
+  }
+
+  // ---------------- SIGN RENDERING ----------------
+  let signEls = [];
+  function clearSigns(){ signEls.forEach(s=>s.remove()); signEls = []; }
+
+  function spawnQuestion(){
+    clearSigns();
+    state.resolved = false;
+    const type = pickQuestionType();
+    const q = type==='verse' ? buildVerseQuestion() : buildFactQuestion();
+    state.current = q;
+    state.isVerse = q.isVerse;
+    el.question.textContent = q.prompt;
+
+    q.answers.forEach((ans, i)=>{
+      const sign = document.createElement('div');
+      sign.className = 'sign';
+      sign.textContent = ans.text;
+      sign.dataset.correct = ans.correct ? '1' : '0';
+      el.lanes[i].appendChild(sign);
+      signEls.push(sign);
+    });
+
+    state.signStart = performance.now();
+    state.duration = q.isVerse ? (7200 + Math.random()*800) : (4600 + Math.random()*700);
+  }
+
+  function resolveWave(hitCorrect){
+    state.resolved = true;
+    if(hitCorrect){
+      state.score += 10 + Math.min(state.streak,5)*2;
+      state.streak++;
+      el.player.classList.remove('hit-bad'); void el.player.offsetWidth; el.player.classList.add('hit-good');
+      flashFeedback(true);
+      signEls[state.lane] && signEls[state.lane].classList.add('correct-flash');
+      if(state.isVerse){
+        state.verseIndex++;
+        if(state.verseIndex >= VERSES.length){
+          state.verseIndex = 0;
+          showToast('Passage Complete! 🎉 Running it again');
+        }
+        updateVerseProgress();
+      }
+    } else {
+      state.streak = 0;
+      state.lives--;
+      el.player.classList.remove('hit-good'); void el.player.offsetWidth; el.player.classList.add('hit-bad');
+      flashFeedback(false);
+      signEls[state.lane] && signEls[state.lane].classList.add('wrong-flash');
+      const correctIdx = signEls.findIndex(s=>s.dataset.correct==='1');
+      if(correctIdx>=0) signEls[correctIdx].classList.add('correct-flash');
+      // verse index does NOT advance on a miss -- same verse comes back around
+    }
+    updateScore(); updateLives();
+
+    if(state.lives<=0){ setTimeout(endGame, 550); return; }
+    setTimeout(()=>{ if(state.playing) spawnQuestion(); }, 700);
+  }
+
+  function flashFeedback(good){
+    el.feedback.className = good ? 'show-good' : 'show-bad';
+    setTimeout(()=>{ el.feedback.className=''; }, 260);
+  }
+
+  // ---------------- MAIN LOOP ----------------
+  function frame(now){
+    if(!state.playing) return;
+    if(state.current && !state.resolved){
+      const elapsed = now - state.signStart;
+      const t = Math.min(1, elapsed / state.duration);
+      const trackH = el.trackContainer.clientHeight;
+      const startY = -140;
+      const endY = trackH * 0.82;
+      const y = startY + (endY-startY)*t;
+      signEls.forEach(s=>{ s.style.top = y + 'px'; });
+      if(t >= 1){
+        const correctIdx = signEls.findIndex(s=>s.dataset.correct==='1');
+        resolveWave(correctIdx === state.lane);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function startGame(){
+    state.factsOn = el.catFacts.checked;
+    state.versesOn = el.catVerses.checked;
+    if(!state.factsOn && !state.versesOn) return;
+    state.lane=1; state.lives=3; state.score=0; state.streak=0; state.playing=true;
+    state.verseIndex = 0; state.lastFactPrompt=null;
+    positionPlayer(); updateLives(); updateScore(); updateVerseProgress();
+    el.startOverlay.classList.add('hidden');
+    el.overOverlay.classList.add('hidden');
+    spawnQuestion();
+    requestAnimationFrame(frame);
+  }
+
+  function endGame(){
+    state.playing = false;
+    clearSigns();
+    el.finalScore.textContent = state.score;
+    el.finalNote.textContent = state.score >= 120 ? "Locked in. Run it again to keep it sharp." : "Run it back — repetition is what makes it stick.";
+    el.overOverlay.classList.remove('hidden');
+  }
+
+  function validateStart(){
+    el.startBtn.disabled = !(el.catFacts.checked || el.catVerses.checked);
+  }
+  el.catFacts.addEventListener('change', validateStart);
+  el.catVerses.addEventListener('change', validateStart);
+
+  el.startBtn.addEventListener('click', startGame);
+  document.getElementById('restartBtn').addEventListener('click', ()=>{
+    el.overOverlay.classList.add('hidden');
+    el.startOverlay.classList.remove('hidden');
+  });
+
+  positionPlayer();
+  window.addEventListener('resize', positionPlayer);
+})();
+</script>
+</body>
+</html>

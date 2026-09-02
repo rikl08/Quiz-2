@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word for Word — 1 Corinthians 13</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;800&display=swap');
+  :root{
+    --purple:#4B1F72; --purple-deep:#200B33; --gold:#D8B24C; --gold-bright:#F0CE6C;
+    --chalk:#F5F1E8; --line-white:rgba(245,241,232,0.14);
+    --danger:#E13B3B; --good:#4FD87F; --panel:rgba(255,255,255,0.04);
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; min-height:100%; background:var(--purple-deep); color:var(--chalk); font-family:'Inter',sans-serif; -webkit-user-select:none; }
+  #app{
+    max-width:680px; margin:0 auto; min-height:100vh;
+    background: radial-gradient(ellipse at 50% -10%, rgba(216,178,76,0.16), transparent 55%), linear-gradient(180deg, var(--purple) 0%, var(--purple-deep) 100%);
+    padding: 18px 16px 40px;
+  }
+  h1{ font-family:'Anton'; letter-spacing:1px; text-transform:uppercase; color:var(--gold-bright); font-size:clamp(20px,5.5vw,28px); text-align:center; margin:4px 0 2px; }
+  .sub{ text-align:center; color:rgba(245,241,232,0.65); font-size:12.5px; margin-bottom:16px; line-height:1.5; }
+
+  /* verse chip selector */
+  #chips{ display:flex; gap:6px; overflow-x:auto; padding:4px 2px 14px; }
+  .chip{
+    flex:0 0 auto; width:38px; height:38px; border-radius:50%; border:2px solid var(--line-white);
+    background:var(--panel); color:var(--chalk); font-family:'Anton'; font-size:14px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative;
+  }
+  .chip.active{ border-color:var(--gold); background:rgba(216,178,76,0.18); color:var(--gold-bright); }
+  .chip.mastered{ border-color:var(--good); }
+  .chip.mastered:after{ content:"★"; position:absolute; top:-7px; right:-4px; font-size:11px; color:var(--good); }
+
+  /* level dots */
+  #levelRow{ display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:14px; }
+  .dot{ width:11px; height:11px; border-radius:50%; background:var(--line-white); }
+  .dot.filled{ background:var(--gold); }
+  .dot.current{ box-shadow:0 0 0 3px rgba(216,178,76,0.25); }
+  #levelLabel{ font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--gold); margin-left:6px; }
+
+  #versePanel{
+    background:var(--panel); border:1px solid var(--line-white); border-radius:10px;
+    padding:16px 16px; margin-bottom:14px; font-size:16px; line-height:1.85; letter-spacing:0.2px;
+  }
+  #versePanel .blank{ display:inline-block; border-bottom:2px solid var(--gold); color:transparent; min-width:14px; }
+  #versePanel .shown{ color: var(--chalk); }
+  #verseRef{ font-size:11px; letter-spacing:2px; color:var(--gold); text-transform:uppercase; margin-bottom:6px; }
+
+  textarea{
+    width:100%; min-height:110px; border-radius:10px; border:1px solid var(--line-white);
+    background:rgba(0,0,0,0.2); color:var(--chalk); font-size:15px; padding:12px; font-family:'Inter';
+    line-height:1.5; resize:vertical;
+  }
+  textarea:focus{ outline:2px solid var(--gold); }
+
+  .row{ display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
+  button{
+    font-family:'Anton'; letter-spacing:1.5px; text-transform:uppercase; font-size:13.5px;
+    background:var(--gold); color:var(--purple-deep); border:none; padding:12px 20px; border-radius:6px; cursor:pointer;
+    box-shadow:0 3px 0 #a5822d;
+  }
+  button:active{ transform:translateY(2px); box-shadow:0 1px 0 #a5822d; }
+  button.secondary{ background:transparent; border:2px solid var(--gold); color:var(--gold-bright); box-shadow:none; padding:10px 18px; }
+
+  #resultPanel{ margin-top:16px; display:none; }
+  #resultPanel.show{ display:block; }
+  #scoreLine{ text-align:center; font-family:'Anton'; font-size:34px; color:var(--chalk); margin-bottom:2px; }
+  #scoreSub{ text-align:center; font-size:12px; letter-spacing:1px; color:rgba(245,241,232,0.65); margin-bottom:14px; text-transform:uppercase; }
+  #diff{ background:var(--panel); border:1px solid var(--line-white); border-radius:10px; padding:14px 16px; font-size:15px; line-height:1.85; }
+  #diff .ok{ color:var(--good); }
+  #diff .bad{ color:var(--danger); text-decoration:line-through; text-decoration-color:rgba(225,59,59,0.6); }
+  #diff .miss{ color:var(--danger); border-bottom:2px dotted var(--danger); padding:0 2px; }
+  #diff .extra{ color:rgba(245,241,232,0.4); font-style:italic; }
+
+  #toast{
+    position:fixed; top:16px; left:50%; transform:translateX(-50%) translateY(-20px); z-index:60;
+    background:var(--gold); color:var(--purple-deep); font-family:'Anton'; letter-spacing:1px;
+    padding:12px 22px; border-radius:8px; font-size:14px; text-transform:uppercase; opacity:0;
+    transition:opacity .25s, transform .25s; text-align:center; pointer-events:none; max-width:90%;
+  }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  footer{ text-align:center; font-size:11px; color:rgba(245,241,232,0.4); margin-top:24px; line-height:1.6; }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>🔥 Word for Word</h1>
+  <div class="sub">Type the full verse from memory. Get 90%+ and more words fade out next round — five levels from mostly-visible to completely blind.</div>
+
+  <div id="chips"></div>
+
+  <div id="levelRow">
+    <div class="dot" data-i="0"></div>
+    <div class="dot" data-i="1"></div>
+    <div class="dot" data-i="2"></div>
+    <div class="dot" data-i="3"></div>
+    <div class="dot" data-i="4"></div>
+    <span id="levelLabel"></span>
+  </div>
+
+  <div id="versePanel">
+    <div id="verseRef">1 Corinthians 13:1</div>
+    <div id="verseMasked"></div>
+  </div>
+
+  <textarea id="input" placeholder="Type the whole verse here, from memory..."></textarea>
+
+  <div class="row">
+    <button id="checkBtn">Check</button>
+    <button class="secondary" id="shuffleBtn">New Blanks</button>
+    <button class="secondary" id="revealBtn">Reveal</button>
+  </div>
+
+  <div id="resultPanel">
+    <div id="scoreLine">0%</div>
+    <div id="scoreSub"></div>
+    <div id="diff"></div>
+  </div>
+
+  <div id="toast"></div>
+
+  <footer>Blanked words are sized to their letter count as a shape hint. Punctuation is ignored when grading — only the words matter.</footer>
+</div>
+
+<script>
+(function(){
+  const VERSES = [
+    "If I speak human or angelic tongues but do not have love, I am a noisy gong or a clanging cymbal.",
+    "If I have the gift of prophecy and understand all mysteries and all knowledge, and if I have all faith so that I can move mountains but do not have love, I am nothing.",
+    "And if I give away all my possessions, and if I give over my body in order to boast but do not have love, I gain nothing.",
+    "Love is patient, love is kind. Love does not envy, is not boastful, is not arrogant,",
+    "is not rude, is not self-seeking, is not irritable, and does not keep a record of wrongs.",
+    "Love finds no joy in unrighteousness but rejoices in the truth.",
+    "It bears all things, believes all things, hopes all things, endures all things.",
+    "Love never ends. But as for prophecies, they will come to an end; as for tongues, they will cease; as for knowledge, it will come to an end.",
+    "For we know in part, and we prophesy in part,",
+    "but when the perfect comes, the partial will come to an end.",
+    "When I was a child, I spoke like a child, I thought like a child, I reasoned like a child. When I became a man, I put aside childish things.",
+    "For now we see only a reflection as in a mirror, but then face to face. Now I know in part, but then I will know fully, as I am fully known.",
+    "Now these three remain: faith, hope, and love — but the greatest of these is love."
+  ];
+  const LEVEL_FRACTIONS = [0.2, 0.4, 0.6, 0.8, 1.0]; // fraction of words blanked at each level
+  const PASS_THRESHOLD = 90;
+
+  const state = {
+    verseIdx: 0,
+    level: 0, // 0-4
+    mask: [],  // boolean per word, true = blanked
+    mastered: new Array(VERSES.length).fill(false),
+    levelReached: new Array(VERSES.length).fill(0) // highest level index passed+1
+  };
+
+  function normalize(w){
+    return w.toLowerCase().replace(/[^a-z0-9']/g,'');
+  }
+  function wordsOf(text){ return text.trim().split(/\s+/).filter(Boolean); }
+
+  function buildMask(wordCount, fraction){
+    const idxs = Array.from({length:wordCount}, (_,i)=>i);
+    for(let i=idxs.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [idxs[i],idxs[j]]=[idxs[j],idxs[i]]; }
+    const blankCount = Math.round(wordCount*fraction);
+    const blankSet = new Set(idxs.slice(0, blankCount));
+    return Array.from({length:wordCount}, (_,i)=> blankSet.has(i));
+  }
+
+  // ---------------- DOM refs ----------------
+  const chipsEl = document.getElementById('chips');
+  const dots = document.querySelectorAll('.dot');
+  const levelLabel = document.getElementById('levelLabel');
+  const verseRef = document.getElementById('verseRef');
+  const verseMasked = document.getElementById('verseMasked');
+  const input = document.getElementById('input');
+  const resultPanel = document.getElementById('resultPanel');
+  const scoreLine = document.getElementById('scoreLine');
+  const scoreSub = document.getElementById('scoreSub');
+  const diffEl = document.getElementById('diff');
+  const toastEl = document.getElementById('toast');
+
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    setTimeout(()=> toastEl.classList.remove('show'), 1600);
+  }
+
+  function renderChips(){
+    chipsEl.innerHTML = '';
+    VERSES.forEach((_,i)=>{
+      const c = document.createElement('div');
+      c.className = 'chip' + (i===state.verseIdx?' active':'') + (state.mastered[i]?' mastered':'');
+      c.textContent = i+1;
+      c.addEventListener('click', ()=> selectVerse(i));
+      chipsEl.appendChild(c);
+    });
+  }
+
+  function renderLevelDots(){
+    dots.forEach((d,i)=>{
+      d.classList.toggle('filled', i <= state.level);
+      d.classList.toggle('current', i === state.level);
+    });
+    const pct = Math.round(LEVEL_FRACTIONS[state.level]*100);
+    levelLabel.textContent = `Level ${state.level+1} / 5 · ${pct}% hidden`;
+  }
+
+  function renderVerse(){
+    const text = VERSES[state.verseIdx];
+    const words = wordsOf(text);
+    verseRef.textContent = `1 Corinthians 13:${state.verseIdx+1}`;
+    verseMasked.innerHTML = words.map((w,i)=>{
+      if(state.mask[i]){
+        const len = w.replace(/[^\w']/g,'').length || 3;
+        return `<span class="blank">${'_'.repeat(Math.max(2,len))}</span>`;
+      }
+      return `<span class="shown">${w}</span>`;
+    }).join(' ');
+  }
+
+  function newRound(keepLevel){
+    const words = wordsOf(VERSES[state.verseIdx]);
+    if(!keepLevel){
+      // nothing extra
+    }
+    state.mask = buildMask(words.length, LEVEL_FRACTIONS[state.level]);
+    renderVerse();
+    renderLevelDots();
+    resultPanel.classList.remove('show');
+    input.value = '';
+  }
+
+  function selectVerse(i){
+    state.verseIdx = i;
+    state.level = state.levelReached[i] || 0;
+    if(state.level > 4) state.level = 4;
+    renderChips();
+    newRound(false);
+  }
+
+  function checkAnswer(){
+    const correctWords = wordsOf(VERSES[state.verseIdx]);
+    const typedWords = wordsOf(input.value);
+
+    let correctCount = 0;
+    const maxLen = Math.max(correctWords.length, typedWords.length);
+    const diffParts = [];
+
+    for(let i=0;i<maxLen;i++){
+      const cw = correctWords[i];
+      const tw = typedWords[i];
+      if(cw && tw){
+        if(normalize(cw) === normalize(tw)){
+          correctCount++;
+          diffParts.push(`<span class="ok">${cw}</span>`);
+        } else {
+          diffParts.push(`<span class="miss">${cw}</span>`);
+        }
+      } else if(cw && !tw){
+        diffParts.push(`<span class="miss">${cw}</span>`);
+      } else if(!cw && tw){
+        diffParts.push(`<span class="extra">${tw}</span>`);
+      }
+    }
+
+    const pct = Math.round((correctCount / correctWords.length) * 100);
+    scoreLine.textContent = pct + '%';
+    diffEl.innerHTML = diffParts.join(' ');
+    resultPanel.classList.add('show');
+
+    if(pct >= PASS_THRESHOLD){
+      scoreSub.textContent = 'Passed — nice recall';
+      state.levelReached[state.verseIdx] = Math.max(state.levelReached[state.verseIdx], state.level+1);
+      if(state.level >= 4){
+        state.mastered[state.verseIdx] = true;
+        renderChips();
+        showToast(`Verse ${state.verseIdx+1} mastered! 🎉`);
+        setTimeout(()=>{
+          if(state.verseIdx < VERSES.length-1){
+            selectVerse(state.verseIdx+1);
+          } else {
+            newRound(true);
+          }
+        }, 1400);
+      } else {
+        state.level++;
+        showToast('Level up — more words hidden');
+        setTimeout(()=> newRound(true), 900);
+      }
+    } else {
+      scoreSub.textContent = 'Under 90% — try this level again';
+      setTimeout(()=> newRound(true), 1600);
+    }
+  }
+
+  document.getElementById('checkBtn').addEventListener('click', checkAnswer);
+  document.getElementById('shuffleBtn').addEventListener('click', ()=> newRound(true));
+  document.getElementById('revealBtn').addEventListener('click', ()=>{
+    const words = wordsOf(VERSES[state.verseIdx]);
+    verseMasked.innerHTML = words.map(w=>`<span class="shown">${w}</span>`).join(' ');
+    showToast('Revealed — this round won\'t count toward leveling up');
+  });
+
+  renderChips();
+  newRound(false);
+})();
+</script>
+</body>
+</html>
